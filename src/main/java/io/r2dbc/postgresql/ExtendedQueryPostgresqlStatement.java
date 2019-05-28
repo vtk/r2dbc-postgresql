@@ -39,6 +39,7 @@ import java.util.function.Predicate;
 import java.util.regex.Matcher;
 
 import static io.r2dbc.postgresql.client.ExtendedQueryMessageFlow.PARAMETER_SYMBOL;
+import static io.r2dbc.postgresql.message.frontend.Execute.NO_LIMIT;
 import static io.r2dbc.postgresql.util.PredicateUtils.not;
 import static io.r2dbc.postgresql.util.PredicateUtils.or;
 
@@ -61,6 +62,8 @@ final class ExtendedQueryPostgresqlStatement implements PostgresqlStatement {
     private final StatementCache statementCache;
 
     private String[] generatedColumns;
+
+    private int fetchSize = NO_LIMIT;
 
     ExtendedQueryPostgresqlStatement(Client client, Codecs codecs, PortalNameSupplier portalNameSupplier, String sql, StatementCache statementCache, boolean forceBinary) {
         this.client = Assert.requireNonNull(client, "client must not be null");
@@ -140,6 +143,12 @@ final class ExtendedQueryPostgresqlStatement implements PostgresqlStatement {
     }
 
     @Override
+    public ExtendedQueryPostgresqlStatement fetchSize(int rows) {
+        this.fetchSize = Assert.require(rows, s -> s >= 0, "fetch size must be greater or equal zero");
+        return this;
+    }
+
+    @Override
     public String toString() {
         return "ExtendedQueryPostgresqlStatement{" +
             "bindings=" + this.bindings +
@@ -183,7 +192,7 @@ final class ExtendedQueryPostgresqlStatement implements PostgresqlStatement {
         ExceptionFactory factory = ExceptionFactory.withSql(sql);
         return this.statementCache.getName(this.bindings.first(), sql)
             .flatMapMany(name -> ExtendedQueryMessageFlow
-                .execute(Flux.fromIterable(this.bindings.bindings), this.client, this.portalNameSupplier, name, sql, this.forceBinary))
+                .execute(this.bindings.bindings, this.client, this.portalNameSupplier, name, sql, this.forceBinary, this.fetchSize))
             .filter(RESULT_FRAME_FILTER)
             .windowUntil(CloseComplete.class::isInstance)
             .map(messages -> PostgresqlResult.toResult(this.codecs, messages, factory));

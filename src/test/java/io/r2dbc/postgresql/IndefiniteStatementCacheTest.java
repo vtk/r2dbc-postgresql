@@ -22,6 +22,7 @@ import io.r2dbc.postgresql.client.Parameter;
 import io.r2dbc.postgresql.client.TestClient;
 import io.r2dbc.postgresql.message.backend.ErrorResponse;
 import io.r2dbc.postgresql.message.backend.ParseComplete;
+import io.r2dbc.postgresql.message.backend.ReadyForQuery;
 import io.r2dbc.postgresql.message.frontend.Describe;
 import io.r2dbc.postgresql.message.frontend.ExecutionType;
 import io.r2dbc.postgresql.message.frontend.Parse;
@@ -51,11 +52,11 @@ final class IndefiniteStatementCacheTest {
         // @formatter:off
         Client client = TestClient.builder()
             .expectRequest(new Parse("S_0", Collections.singletonList(100), "test-query"), new Describe("S_0", ExecutionType.STATEMENT), Sync.INSTANCE)
-                .thenRespond(ParseComplete.INSTANCE)
+                .thenRespond(ParseComplete.INSTANCE, new ReadyForQuery(ReadyForQuery.TransactionStatus.IDLE))
             .expectRequest(new Parse("S_1", Collections.singletonList(200), "test-query"), new Describe("S_1", ExecutionType.STATEMENT), Sync.INSTANCE)
-                .thenRespond(ParseComplete.INSTANCE)
+                .thenRespond(ParseComplete.INSTANCE, new ReadyForQuery(ReadyForQuery.TransactionStatus.IDLE))
             .expectRequest(new Parse("S_2", Collections.singletonList(200), "test-query-2"), new Describe("S_2", ExecutionType.STATEMENT), Sync.INSTANCE)
-                .thenRespond(ParseComplete.INSTANCE)
+                .thenRespond(ParseComplete.INSTANCE, new ReadyForQuery(ReadyForQuery.TransactionStatus.IDLE))
             .build();
         // @formatter:on
 

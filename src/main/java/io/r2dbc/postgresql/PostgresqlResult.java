@@ -22,7 +22,6 @@ import io.r2dbc.postgresql.message.backend.BackendMessage;
 import io.r2dbc.postgresql.message.backend.CommandComplete;
 import io.r2dbc.postgresql.message.backend.DataRow;
 import io.r2dbc.postgresql.message.backend.EmptyQueryResponse;
-import io.r2dbc.postgresql.message.backend.PortalSuspended;
 import io.r2dbc.postgresql.message.backend.RowDescription;
 import io.r2dbc.postgresql.util.Assert;
 import io.r2dbc.spi.Result;
@@ -41,7 +40,7 @@ import static io.r2dbc.postgresql.util.PredicateUtils.or;
  */
 final class PostgresqlResult implements io.r2dbc.postgresql.api.PostgresqlResult {
 
-    private static final Predicate<BackendMessage> TAKE_UNTIL = or(CommandComplete.class::isInstance, EmptyQueryResponse.class::isInstance, PortalSuspended.class::isInstance);
+    private static final Predicate<BackendMessage> TAKE_UNTIL = or(CommandComplete.class::isInstance, EmptyQueryResponse.class::isInstance);
 
     private final Codecs codecs;
 

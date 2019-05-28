@@ -60,6 +60,13 @@ public interface Client {
     Flux<BackendMessage> exchange(Publisher<FrontendMessage> requests);
 
     /**
+     * Send requests without expecting response
+     *
+     * @param requests the publisher of outbound messages
+     */
+    void send(Flux<FrontendMessage> requests);
+
+    /**
      * Returns the {@link ByteBufAllocator}.
      *
      * @return the {@link ByteBufAllocator}

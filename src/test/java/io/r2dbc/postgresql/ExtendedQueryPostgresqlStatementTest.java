@@ -34,6 +34,7 @@ import io.r2dbc.postgresql.message.frontend.Close;
 import io.r2dbc.postgresql.message.frontend.Describe;
 import io.r2dbc.postgresql.message.frontend.Execute;
 import io.r2dbc.postgresql.message.frontend.ExecutionType;
+import io.r2dbc.postgresql.message.frontend.Flush;
 import io.r2dbc.postgresql.message.frontend.Sync;
 import io.r2dbc.spi.R2dbcNonTransientResourceException;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,6 @@ import reactor.test.StepVerifier;
 
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 
@@ -52,6 +52,7 @@ import static io.r2dbc.postgresql.client.TestClient.NO_OP;
 import static io.r2dbc.postgresql.message.Format.FORMAT_BINARY;
 import static io.r2dbc.postgresql.type.PostgresqlObjectId.INT4;
 import static io.r2dbc.postgresql.util.TestByteBufAllocator.TEST;
+import static java.util.Collections.emptyList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
@@ -199,6 +200,51 @@ final class ExtendedQueryPostgresqlStatementTest {
         when(this.statementCache.getName(any(), any())).thenReturn(Mono.just("test-name"));
 
         new ExtendedQueryPostgresqlStatement(client, codecs, portalNameSupplier, "test-query-$1-$1", this.statementCache, false)
+            .bind("$1", 100)
+            .add()
+            .bind("$1", 200)
+            .add()
+            .execute()
+            .as(StepVerifier::create)
+            .expectNextCount(2)
+            .verifyComplete();
+    }
+
+
+    @Test
+    void executeWithFetchSize() {
+        Client client = TestClient.builder()
+            .expectRequest(
+                new Bind("B_0", Collections.singletonList(FORMAT_BINARY), Collections.singletonList(TEST.buffer(4).writeInt(100)), Collections.emptyList(), "test-name"),
+                new Describe("B_0", ExecutionType.PORTAL),
+                new Execute("B_0", 1),
+                Flush.INSTANCE)
+            .thenRespond(BindComplete.INSTANCE, NoData.INSTANCE, new CommandComplete("test", null, null))
+            .expectRequest(new Close("B_0", ExecutionType.PORTAL), Flush.INSTANCE)
+            .thenRespond(CloseComplete.INSTANCE)
+            .expectRequest(
+                new Bind("B_1", Collections.singletonList(FORMAT_BINARY), Collections.singletonList(TEST.buffer(4).writeInt(200)), emptyList(), "test-name"),
+                new Describe("B_1", ExecutionType.PORTAL),
+                new Execute("B_1", 1),
+                Flush.INSTANCE)
+            .thenRespond(BindComplete.INSTANCE, NoData.INSTANCE, new CommandComplete("test", null, null))
+            .expectRequest(new Close("B_1", ExecutionType.PORTAL), Flush.INSTANCE)
+            .thenRespond(CloseComplete.INSTANCE)
+            .expectRequest(Sync.INSTANCE)
+            .thenRespond()
+            .build();
+
+        MockCodecs codecs = MockCodecs.builder()
+            .encoding(100, new Parameter(FORMAT_BINARY, INT4.getObjectId(), Flux.just(TEST.buffer(4).writeInt(100))))
+            .encoding(200, new Parameter(FORMAT_BINARY, INT4.getObjectId(), Flux.just(TEST.buffer(4).writeInt(200))))
+            .build();
+
+        PortalNameSupplier portalNameSupplier = new LinkedList<>(Arrays.asList("B_0", "B_1"))::remove;
+
+        when(this.statementCache.getName(any(), any())).thenReturn(Mono.just("test-name"));
+
+        new ExtendedQueryPostgresqlStatement(client, codecs, portalNameSupplier, "test-query-$1", this.statementCache, false)
+            .fetchSize(1)
             .bind("$1", 100)
             .add()
             .bind("$1", 200)

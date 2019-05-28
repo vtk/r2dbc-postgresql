@@ -396,6 +396,14 @@ public final class ReactorNettyClient implements Client {
     }
 
     @Override
+    public void send(Flux<FrontendMessage> requests) {
+        Assert.requireNonNull(requests, "requests must not be null");
+
+        requests.subscribe(this.requests::next, this.requests::error, () -> {
+        }, this.requests.currentContext());
+    }
+
+    @Override
     public ByteBufAllocator getByteBufAllocator() {
         return this.byteBufAllocator;
     }

@@ -18,6 +18,7 @@ package io.r2dbc.postgresql.client;
 
 import io.netty.buffer.ByteBufAllocator;
 import io.r2dbc.postgresql.message.backend.BackendMessage;
+import io.r2dbc.postgresql.message.backend.ReadyForQuery;
 import io.r2dbc.postgresql.message.backend.NotificationResponse;
 import io.r2dbc.postgresql.message.frontend.FrontendMessage;
 import io.r2dbc.postgresql.util.Assert;
@@ -107,8 +108,13 @@ public final class TestClient implements Client {
             .doOnSubscribe(s ->
                 Flux.from(requests)
                     .subscribe(this.requests::next, this.requests::error))
-            .next()
-            .flatMapMany(Function.identity());
+            .concatMap(response -> response)
+            .takeUntil(ReadyForQuery.class::isInstance);
+    }
+
+    @Override
+    public void send(Flux<FrontendMessage> requests) {
+        requests.subscribe(this.requests::next);
     }
 
     @Override

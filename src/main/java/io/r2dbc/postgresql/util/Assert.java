@@ -18,6 +18,8 @@ package io.r2dbc.postgresql.util;
 
 import reactor.util.annotation.Nullable;
 
+import java.util.function.Predicate;
+
 import java.io.File;
 
 /**
@@ -131,6 +133,29 @@ public final class Assert {
             throw new IllegalArgumentException(message);
         }
         return file;
+    }
+
+    /**
+     * Checks that the specified value is of a specific type.
+     *
+     * @param value     the value to check
+     * @param predicate predicate to check value
+     * @param message   the message to use in exception if type is not as required
+     * @param <T>       the type being required
+     * @return the value casted to the required type
+     * @throws IllegalArgumentException if {@code value} is not of the required type
+     * @throws IllegalArgumentException if {@code value}, {@code type}, or {@code message} is {@code null}
+     */
+    public static <T> T require(T value, Predicate<T> predicate, String message) {
+        requireNonNull(value, "value must not be null");
+        requireNonNull(predicate, "predicate must not be null");
+        requireNonNull(message, "message must not be null");
+
+        if (!predicate.test(value)) {
+            throw new IllegalArgumentException(message);
+        }
+
+        return value;
     }
 
 }

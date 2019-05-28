@@ -19,23 +19,30 @@ package io.r2dbc.postgresql.client;
 import io.netty.buffer.Unpooled;
 import io.r2dbc.postgresql.message.Format;
 import io.r2dbc.postgresql.message.backend.BackendMessage;
+import io.r2dbc.postgresql.message.backend.CloseComplete;
+import io.r2dbc.postgresql.message.backend.CommandComplete;
 import io.r2dbc.postgresql.message.backend.NoData;
+import io.r2dbc.postgresql.message.backend.PortalSuspended;
 import io.r2dbc.postgresql.message.backend.RowDescription;
 import io.r2dbc.postgresql.message.frontend.Bind;
 import io.r2dbc.postgresql.message.frontend.Close;
 import io.r2dbc.postgresql.message.frontend.Describe;
 import io.r2dbc.postgresql.message.frontend.Execute;
+import io.r2dbc.postgresql.message.frontend.Flush;
 import io.r2dbc.postgresql.message.frontend.FrontendMessage;
 import io.r2dbc.postgresql.message.frontend.Parse;
 import io.r2dbc.postgresql.message.frontend.Sync;
 import io.r2dbc.postgresql.util.Assert;
-import org.reactivestreams.Publisher;
+import reactor.core.publisher.EmitterProcessor;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
@@ -71,15 +78,62 @@ public final class ExtendedQueryMessageFlow {
      * @return the messages received in response to the exchange
      * @throws IllegalArgumentException if {@code bindings}, {@code client}, {@code portalNameSupplier}, or {@code statementName} is {@code null}
      */
-    public static Flux<BackendMessage> execute(Publisher<Binding> bindings, Client client, PortalNameSupplier portalNameSupplier, String statementName, String query, boolean forceBinary) {
+    public static Flux<BackendMessage> execute(Iterable<Binding> bindings, Client client, PortalNameSupplier portalNameSupplier, String statementName, String query, boolean forceBinary,
+                                               int fetchSize) {
         Assert.requireNonNull(bindings, "bindings must not be null");
         Assert.requireNonNull(client, "client must not be null");
         Assert.requireNonNull(portalNameSupplier, "portalNameSupplier must not be null");
         Assert.requireNonNull(statementName, "statementName must not be null");
+        Assert.require(fetchSize, s -> s >= 0, "statement must not be null");
 
-        return client.exchange(Flux.from(bindings)
-            .flatMap(binding -> toBindFlow(binding, portalNameSupplier, statementName, query, forceBinary))
-            .concatWith(Mono.just(Sync.INSTANCE)));
+        if (fetchSize == NO_LIMIT) {
+            return client.exchange(Flux.fromIterable(bindings)
+                .flatMap(binding -> toBindFlow(binding, portalNameSupplier.get(), statementName, query, forceBinary, fetchSize))
+                .concatWith(Mono.just(Sync.INSTANCE)));
+        }
+
+        Iterator<Binding> iterator = bindings.iterator();
+        Binding first = iterator.next();
+
+        EmitterProcessor<Binding> bindingProcessor = EmitterProcessor.create();
+        FluxSink<Binding> bindingSink = bindingProcessor.sink();
+        AtomicReference<String> currentPortal = new AtomicReference<>(null);
+
+        Flux<FrontendMessage> requests = bindingProcessor.startWith(first)
+            .concatMap(binding -> {
+                String portal = portalNameSupplier.get();
+                currentPortal.set(portal);
+                return toBindFlow(binding, portal, statementName, query, forceBinary, fetchSize);
+            })
+            .concatWith(Mono.just(Sync.INSTANCE));
+
+        return client.exchange(requests)
+            .doOnNext(message -> {
+                if (message instanceof CommandComplete) {
+                    String p = currentPortal.get();
+                    assert p != null;
+                    client.send(Flux.just(new Close(p, PORTAL), Flush.INSTANCE));
+                } else if (message instanceof PortalSuspended) {
+                    String p = currentPortal.get();
+                    assert p != null;
+                    client.send(Flux.just(new Execute(p, fetchSize), Flush.INSTANCE));
+                } else if (message instanceof CloseComplete) {
+                    if (iterator.hasNext()) {
+                        Binding nextBinding = iterator.next();
+                        bindingSink.next(nextBinding);
+                    } else {
+                        bindingSink.complete();
+                    }
+                }
+            })
+            .doOnCancel(() -> {
+                String p = currentPortal.get();
+                if (p != null) {
+                    client.send(Flux.just(new Close(p, PORTAL), Sync.INSTANCE));
+                } else {
+                    client.send(Flux.just(Sync.INSTANCE));
+                }
+            });
     }
 
     /**
@@ -110,9 +164,7 @@ public final class ExtendedQueryMessageFlow {
         }
     }
 
-    private static Flux<FrontendMessage> toBindFlow(Binding binding, PortalNameSupplier portalNameSupplier, String statementName, String query, boolean forceBinary) {
-        String portal = portalNameSupplier.get();
-
+    private static Flux<FrontendMessage> toBindFlow(Binding binding, String portal, String statementName, String query, boolean forceBinary, int fetchSize) {
         return Flux.fromIterable(binding.getParameterValues())
             .flatMap(f -> {
                 if (f == Parameter.NULL_VALUE) {
@@ -125,8 +177,9 @@ public final class ExtendedQueryMessageFlow {
             .collectList()
             .flatMapMany(values -> {
                 Bind bind = new Bind(portal, binding.getParameterFormats(), values, resultFormat(forceBinary), statementName);
+                FrontendMessage lastMessage = fetchSize == NO_LIMIT ? new Close(portal, PORTAL) : Flush.INSTANCE;
 
-                return Flux.just(bind, new Describe(portal, PORTAL), new Execute(portal, NO_LIMIT), new Close(portal, PORTAL));
+                return Flux.just(bind, new Describe(portal, PORTAL), new Execute(portal, fetchSize), lastMessage);
             }).doOnSubscribe(ignore -> QueryLogger.logQuery(query));
     }
 
