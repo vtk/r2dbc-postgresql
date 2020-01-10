@@ -63,7 +63,7 @@ public final class ExtendedQueryMessageFlow {
      * Execute the execute portion of the <a href="https://www.postgresql.org/docs/current/static/protocol-flow.html#PROTOCOL-FLOW-EXT-QUERY">Extended query</a> message flow.
      *
      * @param bindings           the {@link Binding}s to bind
-     * @param client             the {@link Client} to exchange messages with
+     * @param protocolConnection             the {@link ProtocolConnection} to exchange messages with
      * @param portalNameSupplier supplier unique portal names for each binding
      * @param statementName      the name of the statementName to execute
      * @param query              the query to execute
@@ -71,13 +71,13 @@ public final class ExtendedQueryMessageFlow {
      * @return the messages received in response to the exchange
      * @throws IllegalArgumentException if {@code bindings}, {@code client}, {@code portalNameSupplier}, or {@code statementName} is {@code null}
      */
-    public static Flux<BackendMessage> execute(Publisher<Binding> bindings, Client client, PortalNameSupplier portalNameSupplier, String statementName, String query, boolean forceBinary) {
+    public static Flux<BackendMessage> execute(Publisher<Binding> bindings, ProtocolConnection protocolConnection, PortalNameSupplier portalNameSupplier, String statementName, String query, boolean forceBinary) {
         Assert.requireNonNull(bindings, "bindings must not be null");
-        Assert.requireNonNull(client, "client must not be null");
+        Assert.requireNonNull(protocolConnection, "client must not be null");
         Assert.requireNonNull(portalNameSupplier, "portalNameSupplier must not be null");
         Assert.requireNonNull(statementName, "statementName must not be null");
 
-        return client.exchange(Flux.from(bindings)
+        return protocolConnection.exchange(Flux.from(bindings)
             .flatMap(binding -> toBindFlow(binding, portalNameSupplier, statementName, query, forceBinary))
             .concatWith(Mono.just(Sync.INSTANCE)));
     }
@@ -85,20 +85,20 @@ public final class ExtendedQueryMessageFlow {
     /**
      * Execute the parse portion of the <a href="https://www.postgresql.org/docs/current/static/protocol-flow.html#PROTOCOL-FLOW-EXT-QUERY">Extended query</a> message flow.
      *
-     * @param client the {@link Client} to exchange messages with
+     * @param protocolConnection the {@link ProtocolConnection} to exchange messages with
      * @param name   the name of the statement to prepare
      * @param query  the query to execute
      * @param types  the parameter types for the query
      * @return the messages received in response to this exchange
      * @throws IllegalArgumentException if {@code client}, {@code name}, {@code query}, or {@code types} is {@code null}
      */
-    public static Flux<BackendMessage> parse(Client client, String name, String query, List<Integer> types) {
-        Assert.requireNonNull(client, "client must not be null");
+    public static Flux<BackendMessage> parse(ProtocolConnection protocolConnection, String name, String query, List<Integer> types) {
+        Assert.requireNonNull(protocolConnection, "client must not be null");
         Assert.requireNonNull(name, "name must not be null");
         Assert.requireNonNull(query, "query must not be null");
         Assert.requireNonNull(types, "types must not be null");
 
-        return client.exchange(Flux.just(new Parse(name, types, query), new Describe(name, STATEMENT), Sync.INSTANCE))
+        return protocolConnection.exchange(Flux.just(new Parse(name, types, query), new Describe(name, STATEMENT), Sync.INSTANCE))
             .takeUntil(TAKE_UNTIL);
     }
 

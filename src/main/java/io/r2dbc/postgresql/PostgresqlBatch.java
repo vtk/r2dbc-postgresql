@@ -16,7 +16,7 @@
 
 package io.r2dbc.postgresql;
 
-import io.r2dbc.postgresql.client.Client;
+import io.r2dbc.postgresql.client.ProtocolConnection;
 import io.r2dbc.postgresql.codec.Codecs;
 import io.r2dbc.postgresql.util.Assert;
 import io.r2dbc.spi.Batch;
@@ -30,14 +30,14 @@ import java.util.List;
  */
 final class PostgresqlBatch implements io.r2dbc.postgresql.api.PostgresqlBatch {
 
-    private final Client client;
+    private final ProtocolConnection protocolConnection;
 
     private final Codecs codecs;
 
     private final List<String> statements = new ArrayList<>();
 
-    PostgresqlBatch(Client client, Codecs codecs) {
-        this.client = Assert.requireNonNull(client, "client must not be null");
+    PostgresqlBatch(ProtocolConnection protocolConnection, Codecs codecs) {
+        this.protocolConnection = Assert.requireNonNull(protocolConnection, "client must not be null");
         this.codecs = Assert.requireNonNull(codecs, "codecs must not be null");
     }
 
@@ -55,14 +55,14 @@ final class PostgresqlBatch implements io.r2dbc.postgresql.api.PostgresqlBatch {
 
     @Override
     public Flux<io.r2dbc.postgresql.api.PostgresqlResult> execute() {
-        return new SimpleQueryPostgresqlStatement(this.client, this.codecs, String.join("; ", this.statements))
+        return new SimpleQueryPostgresqlStatement(this.protocolConnection, this.codecs, String.join("; ", this.statements))
             .execute();
     }
 
     @Override
     public String toString() {
         return "PostgresqlBatch{" +
-            "client=" + this.client +
+            "client=" + this.protocolConnection +
             ", codecs=" + this.codecs +
             ", statements=" + this.statements +
             '}';

@@ -86,9 +86,9 @@ import static io.r2dbc.postgresql.client.TransactionStatus.IDLE;
  *
  * @see TcpClient
  */
-public final class ReactorNettyClient implements Client {
+public final class ReactorNettyProtocolConnection implements ProtocolConnection {
 
-    private static final Logger logger = Loggers.getLogger(ReactorNettyClient.class);
+    private static final Logger logger = Loggers.getLogger(ReactorNettyProtocolConnection.class);
 
     private static final boolean DEBUG_ENABLED = logger.isDebugEnabled();
 
@@ -124,7 +124,7 @@ public final class ReactorNettyClient implements Client {
      * @param connection the TCP connection
      * @throws IllegalArgumentException if {@code connection} is {@code null}
      */
-    private ReactorNettyClient(Connection connection) {
+    private ReactorNettyProtocolConnection(Connection connection) {
         Assert.requireNonNull(connection, "Connection must not be null");
 
         connection.addHandler(new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE - 5, 1, 4, -4, 0));
@@ -262,45 +262,19 @@ public final class ReactorNettyClient implements Client {
     /**
      * Creates a new frame processor connected to a given host.
      *
-     * @param host the host to connect to
-     * @param port the port to connect to
-     * @throws IllegalArgumentException if {@code host} is {@code null}
-     */
-    public static Mono<ReactorNettyClient> connect(String host, int port) {
-        Assert.requireNonNull(host, "host must not be null");
-
-        return connect(host, port, null, new SSLConfig(SSLMode.DISABLE, null, null));
-    }
-
-    /**
-     * Creates a new frame processor connected to a given host.
-     *
-     * @param host           the host to connect to
-     * @param port           the port to connect to
-     * @param connectTimeout connect timeout
-     * @param sslConfig      SSL configuration
-     * @throws IllegalArgumentException if {@code host} is {@code null}
-     */
-    public static Mono<ReactorNettyClient> connect(String host, int port, @Nullable Duration connectTimeout, SSLConfig sslConfig) {
-        return connect(ConnectionProvider.newConnection(), InetSocketAddress.createUnresolved(host, port), connectTimeout, sslConfig);
-    }
-
-    /**
-     * Creates a new frame processor connected to a given host.
-     *
      * @param connectionProvider the connection provider resources
-     * @param socketAddress      the socketAddress to connect to
+     * @param endpoint      the socketAddress to connect to
      * @param connectTimeout     connect timeout
      * @param sslConfig          SSL configuration
      * @throws IllegalArgumentException if {@code host} is {@code null}
      */
-    public static Mono<ReactorNettyClient> connect(ConnectionProvider connectionProvider, SocketAddress socketAddress, @Nullable Duration connectTimeout, SSLConfig sslConfig) {
+    public static Mono<ReactorNettyProtocolConnection> connect(ConnectionProvider connectionProvider, SocketAddress endpoint, @Nullable Duration connectTimeout, SSLConfig sslConfig) {
         Assert.requireNonNull(connectionProvider, "connectionProvider must not be null");
-        Assert.requireNonNull(socketAddress, "socketAddress must not be null");
+        Assert.requireNonNull(endpoint, "endpoint must not be null");
 
-        TcpClient tcpClient = TcpClient.create(connectionProvider).addressSupplier(() -> socketAddress);
+        TcpClient tcpClient = TcpClient.create(connectionProvider).addressSupplier(() -> endpoint);
 
-        if (!(socketAddress instanceof InetSocketAddress)) {
+        if (!(endpoint instanceof InetSocketAddress)) {
             tcpClient = tcpClient.runOn(new SocketLoopResources(), true);
         }
 
@@ -312,13 +286,13 @@ public final class ReactorNettyClient implements Client {
 
             ChannelPipeline pipeline = it.channel().pipeline();
 
-            InternalLogger logger = InternalLoggerFactory.getInstance(ReactorNettyClient.class);
+            InternalLogger logger = InternalLoggerFactory.getInstance(ReactorNettyProtocolConnection.class);
             if (logger.isTraceEnabled()) {
                 pipeline.addFirst(LoggingHandler.class.getSimpleName(),
-                    new LoggingHandler(ReactorNettyClient.class, LogLevel.TRACE));
+                    new LoggingHandler(ReactorNettyProtocolConnection.class, LogLevel.TRACE));
             }
 
-            return registerSslHandler(sslConfig, it).thenReturn(new ReactorNettyClient(it));
+            return registerSslHandler(sslConfig, it).thenReturn(new ReactorNettyProtocolConnection(it));
         });
     }
 

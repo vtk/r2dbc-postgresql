@@ -33,17 +33,17 @@ public final class CancelRequestMessageFlow {
     /**
      * Execute the <a href="https://www.postgresql.org/docs/10/static/protocol-flow.html#idm46428663888448">Cancel Request</a> message flow.
      *
-     * @param client the {@link Client} to exchange messages with
+     * @param protocolConnection the {@link ProtocolConnection} to exchange messages with
      * @return the messages received after authentication is complete, in response to this exchange
      * @throws IllegalArgumentException if {@code Client} is {@code null}
      */
-    public static Flux<BackendMessage> exchange(Client client) {
-        Assert.requireNonNull(client, "client must not be null");
+    public static Flux<BackendMessage> exchange(ProtocolConnection protocolConnection) {
+        Assert.requireNonNull(protocolConnection, "client must not be null");
 
-        int processId = client.getProcessId().orElseThrow(() -> new IllegalStateException("Connection does not yet have a processId"));
-        int secretKey = client.getSecretKey().orElseThrow(() -> new IllegalStateException("Connection does not yet have a secretKey"));
+        int processId = protocolConnection.getProcessId().orElseThrow(() -> new IllegalStateException("Connection does not yet have a processId"));
+        int secretKey = protocolConnection.getSecretKey().orElseThrow(() -> new IllegalStateException("Connection does not yet have a secretKey"));
 
-        return client.exchange(Mono.just(new CancelRequest(processId, secretKey)));
+        return protocolConnection.exchange(Mono.just(new CancelRequest(processId, secretKey)));
     }
 
 }

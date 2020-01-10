@@ -35,7 +35,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 
-import static io.r2dbc.postgresql.client.TestClient.NO_OP;
+import static io.r2dbc.postgresql.client.TestProtocolConnection.NO_OP;
 import static io.r2dbc.postgresql.message.Format.FORMAT_BINARY;
 import static io.r2dbc.postgresql.util.TestByteBufAllocator.TEST;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
@@ -49,7 +49,7 @@ final class ExtendedQueryMessageFlowTest {
             new Binding(1).add(0, new Parameter(FORMAT_BINARY, 100, Flux.just(TEST.buffer(4).writeInt(300))))
         );
 
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(
                 new Bind("B_0", Collections.singletonList(FORMAT_BINARY), Collections.singletonList(TEST.buffer(4).writeInt(200)), Collections.emptyList(), "test-name"),
                 new Describe("B_0", ExecutionType.PORTAL),
@@ -69,7 +69,7 @@ final class ExtendedQueryMessageFlowTest {
         PortalNameSupplier portalNameSupplier = new LinkedList<>(Arrays.asList("B_0", "B_1"))::remove;
 
         ExtendedQueryMessageFlow
-            .execute(bindings, client, portalNameSupplier, "test-name", "", false)
+            .execute(bindings, protocolConnection, portalNameSupplier, "test-name", "", false)
             .as(StepVerifier::create)
             .expectNext(BindComplete.INSTANCE, NoData.INSTANCE, new CommandComplete("test", null, null))
             .expectNext(BindComplete.INSTANCE, NoData.INSTANCE, new CommandComplete("test", null, null))
@@ -102,13 +102,13 @@ final class ExtendedQueryMessageFlowTest {
 
     @Test
     void parse() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(new Parse("test-name", Collections.singletonList(100), "test-query"), new Describe("test-name", ExecutionType.STATEMENT), Sync.INSTANCE)
             .thenRespond(ParseComplete.INSTANCE)
             .build();
 
         ExtendedQueryMessageFlow
-            .parse(client, "test-name", "test-query", Collections.singletonList(100))
+            .parse(protocolConnection, "test-name", "test-query", Collections.singletonList(100))
             .as(StepVerifier::create)
             .expectNext(ParseComplete.INSTANCE)
             .verifyComplete();

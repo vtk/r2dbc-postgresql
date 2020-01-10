@@ -18,8 +18,8 @@ package io.r2dbc.postgresql;
 
 import io.netty.buffer.ByteBuf;
 import io.r2dbc.postgresql.api.PostgresqlResult;
-import io.r2dbc.postgresql.client.Client;
-import io.r2dbc.postgresql.client.TestClient;
+import io.r2dbc.postgresql.client.ProtocolConnection;
+import io.r2dbc.postgresql.client.TestProtocolConnection;
 import io.r2dbc.postgresql.codec.MockCodecs;
 import io.r2dbc.postgresql.message.backend.CommandComplete;
 import io.r2dbc.postgresql.message.backend.DataRow;
@@ -33,7 +33,7 @@ import reactor.test.StepVerifier;
 
 import java.util.Collections;
 
-import static io.r2dbc.postgresql.client.TestClient.NO_OP;
+import static io.r2dbc.postgresql.client.TestProtocolConnection.NO_OP;
 import static io.r2dbc.postgresql.message.Format.FORMAT_TEXT;
 import static io.r2dbc.postgresql.util.TestByteBufAllocator.TEST;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -89,11 +89,11 @@ final class SimpleQueryPostgresqlStatementTest {
 
     @Test
     void executeCommandCompleteMap() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(new Query("test-query")).thenRespond(new CommandComplete("test", null, 1))
             .build();
 
-        new SimpleQueryPostgresqlStatement(client, MockCodecs.empty(), "test-query")
+        new SimpleQueryPostgresqlStatement(protocolConnection, MockCodecs.empty(), "test-query")
             .execute()
             .flatMap(result -> result.map((row, rowMetadata) -> row))
             .as(StepVerifier::create)
@@ -102,11 +102,11 @@ final class SimpleQueryPostgresqlStatementTest {
 
     @Test
     void executeCommandCompleteRowsUpdated() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(new Query("test-query")).thenRespond(new CommandComplete("test", null, 1))
             .build();
 
-        new SimpleQueryPostgresqlStatement(client, MockCodecs.empty(), "test-query")
+        new SimpleQueryPostgresqlStatement(protocolConnection, MockCodecs.empty(), "test-query")
             .execute()
             .flatMap(PostgresqlResult::getRowsUpdated)
             .as(StepVerifier::create)
@@ -116,11 +116,11 @@ final class SimpleQueryPostgresqlStatementTest {
 
     @Test
     void executeEmptyQueryResponseRows() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(new Query("test-query")).thenRespond(EmptyQueryResponse.INSTANCE)
             .build();
 
-        new SimpleQueryPostgresqlStatement(client, MockCodecs.empty(), "test-query")
+        new SimpleQueryPostgresqlStatement(protocolConnection, MockCodecs.empty(), "test-query")
             .execute()
             .flatMap(result -> result.map((row, rowMetadata) -> row))
             .as(StepVerifier::create)
@@ -129,11 +129,11 @@ final class SimpleQueryPostgresqlStatementTest {
 
     @Test
     void executeEmptyQueryResponseRowsUpdated() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(new Query("test-query")).thenRespond(EmptyQueryResponse.INSTANCE)
             .build();
 
-        new SimpleQueryPostgresqlStatement(client, MockCodecs.empty(), "test-query")
+        new SimpleQueryPostgresqlStatement(protocolConnection, MockCodecs.empty(), "test-query")
             .execute()
             .flatMap(PostgresqlResult::getRowsUpdated)
             .as(StepVerifier::create)
@@ -142,11 +142,11 @@ final class SimpleQueryPostgresqlStatementTest {
 
     @Test
     void executeErrorResponseRows() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(new Query("test-query")).thenRespond(new ErrorResponse(Collections.emptyList()))
             .build();
 
-        new SimpleQueryPostgresqlStatement(client, MockCodecs.empty(), "test-query")
+        new SimpleQueryPostgresqlStatement(protocolConnection, MockCodecs.empty(), "test-query")
             .execute()
             .flatMap(result -> result.map((row, rowMetadata) -> row))
             .as(StepVerifier::create)
@@ -155,11 +155,11 @@ final class SimpleQueryPostgresqlStatementTest {
 
     @Test
     void executeErrorResponseRowsUpdated() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(new Query("test-query")).thenRespond(new ErrorResponse(Collections.emptyList()))
             .build();
 
-        new SimpleQueryPostgresqlStatement(client, MockCodecs.empty(), "test-query")
+        new SimpleQueryPostgresqlStatement(protocolConnection, MockCodecs.empty(), "test-query")
             .execute()
             .flatMap(PostgresqlResult::getRowsUpdated)
             .as(StepVerifier::create)
@@ -168,11 +168,11 @@ final class SimpleQueryPostgresqlStatementTest {
 
     @Test
     void executeErrorResponse() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(new Query("test-query")).thenRespond(new ErrorResponse(Collections.emptyList()))
             .build();
 
-        new SimpleQueryPostgresqlStatement(client, MockCodecs.empty(), "test-query")
+        new SimpleQueryPostgresqlStatement(protocolConnection, MockCodecs.empty(), "test-query")
             .execute()
             .flatMap(PostgresqlResult::getRowsUpdated)
             .as(StepVerifier::create)
@@ -182,7 +182,7 @@ final class SimpleQueryPostgresqlStatementTest {
     @Test
     void executeRowDescriptionRows() {
         RowDescription.Field field = new RowDescription.Field((short) 100, 200, 300, (short) 400, FORMAT_TEXT, "test-name", 500);
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(new Query("test-query"))
             .thenRespond(
                 new RowDescription(Collections.singletonList(field)),
@@ -194,7 +194,7 @@ final class SimpleQueryPostgresqlStatementTest {
             .preferredType(200, FORMAT_TEXT, String.class)
             .build();
 
-        new SimpleQueryPostgresqlStatement(client, codecs, "test-query")
+        new SimpleQueryPostgresqlStatement(protocolConnection, codecs, "test-query")
             .execute()
             .flatMap(result -> result.map((row, rowMetadata) -> row))
             .as(StepVerifier::create)
@@ -205,7 +205,7 @@ final class SimpleQueryPostgresqlStatementTest {
 
     @Test
     void executeRowDescriptionRowsUpdated() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(new Query("test-query"))
             .thenRespond(
                 new RowDescription(Collections.singletonList(new RowDescription.Field((short) 100, 200, 300, (short) 400, FORMAT_TEXT, "test-name", 500))),
@@ -213,7 +213,7 @@ final class SimpleQueryPostgresqlStatementTest {
                 new CommandComplete("test", null, null))
             .build();
 
-        new SimpleQueryPostgresqlStatement(client, MockCodecs.empty(), "test-query")
+        new SimpleQueryPostgresqlStatement(protocolConnection, MockCodecs.empty(), "test-query")
             .execute()
             .flatMap(PostgresqlResult::getRowsUpdated)
             .as(StepVerifier::create)
@@ -222,11 +222,11 @@ final class SimpleQueryPostgresqlStatementTest {
 
     @Test
     void returnGeneratedValues() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(new Query("INSERT test-query RETURNING *")).thenRespond(new CommandComplete("test", null, 1))
             .build();
 
-        new SimpleQueryPostgresqlStatement(client, MockCodecs.empty(), "INSERT test-query")
+        new SimpleQueryPostgresqlStatement(protocolConnection, MockCodecs.empty(), "INSERT test-query")
             .returnGeneratedValues()
             .execute()
             .flatMap(result -> result.map((row, rowMetadata) -> row))

@@ -27,14 +27,14 @@ final class CancelRequestMessageFlowTest {
 
     @Test
     void exchange() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .processId(100)
             .secretKey(200)
             .expectRequest(new CancelRequest(100, 200)).thenRespond()
             .build();
 
         CancelRequestMessageFlow
-            .exchange(client)
+            .exchange(protocolConnection)
             .as(StepVerifier::create)
             .verifyComplete();
     }
@@ -47,20 +47,20 @@ final class CancelRequestMessageFlowTest {
 
     @Test
     void exchangeNoProcessId() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .build();
 
-        assertThatIllegalStateException().isThrownBy(() -> CancelRequestMessageFlow.exchange(client))
+        assertThatIllegalStateException().isThrownBy(() -> CancelRequestMessageFlow.exchange(protocolConnection))
             .withMessage("Connection does not yet have a processId");
     }
 
     @Test
     void exchangeNoSecretKey() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .processId(100)
             .build();
 
-        assertThatIllegalStateException().isThrownBy(() -> CancelRequestMessageFlow.exchange(client))
+        assertThatIllegalStateException().isThrownBy(() -> CancelRequestMessageFlow.exchange(protocolConnection))
             .withMessage("Connection does not yet have a secretKey");
     }
 

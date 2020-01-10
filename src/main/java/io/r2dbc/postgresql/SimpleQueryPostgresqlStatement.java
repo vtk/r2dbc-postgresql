@@ -17,7 +17,7 @@
 package io.r2dbc.postgresql;
 
 import io.r2dbc.postgresql.api.PostgresqlStatement;
-import io.r2dbc.postgresql.client.Client;
+import io.r2dbc.postgresql.client.ProtocolConnection;
 import io.r2dbc.postgresql.client.SimpleQueryMessageFlow;
 import io.r2dbc.postgresql.codec.Codecs;
 import io.r2dbc.postgresql.message.backend.BackendMessage;
@@ -37,7 +37,7 @@ final class SimpleQueryPostgresqlStatement implements PostgresqlStatement {
 
     private static final Predicate<BackendMessage> WINDOW_UNTIL = or(CommandComplete.class::isInstance, EmptyQueryResponse.class::isInstance, ErrorResponse.class::isInstance);
 
-    private final Client client;
+    private final ProtocolConnection protocolConnection;
 
     private final Codecs codecs;
 
@@ -45,8 +45,8 @@ final class SimpleQueryPostgresqlStatement implements PostgresqlStatement {
 
     private String[] generatedColumns;
 
-    SimpleQueryPostgresqlStatement(Client client, Codecs codecs, String sql) {
-        this.client = Assert.requireNonNull(client, "client must not be null");
+    SimpleQueryPostgresqlStatement(ProtocolConnection protocolConnection, Codecs codecs, String sql) {
+        this.protocolConnection = Assert.requireNonNull(protocolConnection, "client must not be null");
         this.codecs = Assert.requireNonNull(codecs, "codecs must not be null");
         this.sql = Assert.requireNonNull(sql, "sql must not be null");
     }
@@ -109,7 +109,7 @@ final class SimpleQueryPostgresqlStatement implements PostgresqlStatement {
     @Override
     public String toString() {
         return "SimpleQueryPostgresqlStatement{" +
-            "client=" + this.client +
+            "client=" + this.protocolConnection +
             ", codecs=" + this.codecs +
             ", sql='" + this.sql + '\'' +
             '}';
@@ -124,7 +124,7 @@ final class SimpleQueryPostgresqlStatement implements PostgresqlStatement {
     private Flux<io.r2dbc.postgresql.api.PostgresqlResult> execute(String sql) {
         ExceptionFactory factory = ExceptionFactory.withSql(sql);
         return SimpleQueryMessageFlow
-            .exchange(this.client, sql)
+            .exchange(this.protocolConnection, sql)
             .windowUntil(WINDOW_UNTIL)
             .map(dataRow -> PostgresqlResult.toResult(this.codecs, dataRow, factory));
     }

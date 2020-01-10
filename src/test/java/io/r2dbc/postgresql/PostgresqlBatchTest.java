@@ -16,8 +16,8 @@
 
 package io.r2dbc.postgresql;
 
-import io.r2dbc.postgresql.client.Client;
-import io.r2dbc.postgresql.client.TestClient;
+import io.r2dbc.postgresql.client.ProtocolConnection;
+import io.r2dbc.postgresql.client.TestProtocolConnection;
 import io.r2dbc.postgresql.codec.MockCodecs;
 import io.r2dbc.postgresql.message.backend.CommandComplete;
 import io.r2dbc.postgresql.message.backend.EmptyQueryResponse;
@@ -29,18 +29,18 @@ import reactor.test.StepVerifier;
 
 import java.util.Collections;
 
-import static io.r2dbc.postgresql.client.TestClient.NO_OP;
+import static io.r2dbc.postgresql.client.TestProtocolConnection.NO_OP;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 final class PostgresqlBatchTest {
 
     @Test
     void add() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(new Query("test-query-1; test-query-2")).thenRespond(new CommandComplete("test-1", null, null), new CommandComplete("test-2", null, null))
             .build();
 
-        new PostgresqlBatch(client, MockCodecs.empty())
+        new PostgresqlBatch(protocolConnection, MockCodecs.empty())
             .add("test-query-1")
             .add("test-query-2")
             .execute()
@@ -75,11 +75,11 @@ final class PostgresqlBatchTest {
 
     @Test
     void executeCommandComplete() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(new Query("test-query")).thenRespond(new CommandComplete("test", null, null))
             .build();
 
-        new PostgresqlBatch(client, MockCodecs.empty())
+        new PostgresqlBatch(protocolConnection, MockCodecs.empty())
             .add("test-query")
             .execute()
             .as(StepVerifier::create)
@@ -89,11 +89,11 @@ final class PostgresqlBatchTest {
 
     @Test
     void executeEmptyQueryResponse() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(new Query("test-query")).thenRespond(EmptyQueryResponse.INSTANCE)
             .build();
 
-        new PostgresqlBatch(client, MockCodecs.empty())
+        new PostgresqlBatch(protocolConnection, MockCodecs.empty())
             .add("test-query")
             .execute()
             .as(StepVerifier::create)
@@ -103,11 +103,11 @@ final class PostgresqlBatchTest {
 
     @Test
     void executeErrorResponse() {
-        Client client = TestClient.builder()
+        ProtocolConnection protocolConnection = TestProtocolConnection.builder()
             .expectRequest(new Query("test-query")).thenRespond(new ErrorResponse(Collections.emptyList()))
             .build();
 
-        new PostgresqlBatch(client, MockCodecs.empty())
+        new PostgresqlBatch(protocolConnection, MockCodecs.empty())
             .add("test-query")
             .execute()
             .flatMap(result -> result.map((row, rowMetadata) -> row))

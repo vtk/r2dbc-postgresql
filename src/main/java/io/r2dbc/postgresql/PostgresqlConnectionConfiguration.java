@@ -20,6 +20,7 @@ package io.r2dbc.postgresql;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.r2dbc.postgresql.client.DefaultHostnameVerifier;
+import io.r2dbc.postgresql.client.ProtocolConnectionProvider;
 import io.r2dbc.postgresql.client.SSLConfig;
 import io.r2dbc.postgresql.client.SSLMode;
 import io.r2dbc.postgresql.codec.Codec;
@@ -71,6 +72,8 @@ public final class PostgresqlConnectionConfiguration {
 
     private final int port;
 
+    private final ProtocolConnectionProvider protocolConnectionProvider;
+
     private final String schema;
 
     private final String socket;
@@ -82,7 +85,7 @@ public final class PostgresqlConnectionConfiguration {
     private PostgresqlConnectionConfiguration(String applicationName, boolean autodetectExtensions,
                                               @Nullable Duration connectTimeout, @Nullable String database, List<Extension> extensions, boolean forceBinary, @Nullable String host,
                                               @Nullable Map<String, String> options, @Nullable CharSequence password, int port, @Nullable String schema, @Nullable String socket, String username,
-                                              SSLConfig sslConfig) {
+                                              SSLConfig sslConfig, ProtocolConnectionProvider protocolConnectionProvider) {
         this.applicationName = Assert.requireNonNull(applicationName, "applicationName must not be null");
         this.autodetectExtensions = autodetectExtensions;
         this.connectTimeout = connectTimeout;
@@ -97,6 +100,7 @@ public final class PostgresqlConnectionConfiguration {
         this.socket = socket;
         this.username = Assert.requireNonNull(username, "username must not be null");
         this.sslConfig = sslConfig;
+        this.protocolConnectionProvider = protocolConnectionProvider;
     }
 
     /**
@@ -134,6 +138,7 @@ public final class PostgresqlConnectionConfiguration {
             ", port=" + this.port +
             ", schema='" + this.schema + '\'' +
             ", username='" + this.username + '\'' +
+            ", protocolConnectionProvider='" + this.protocolConnectionProvider + '\'' +
             '}';
     }
 
@@ -226,6 +231,10 @@ public final class PostgresqlConnectionConfiguration {
         return this.sslConfig;
     }
 
+    ProtocolConnectionProvider getProtocolConnectionProvider() {
+        return protocolConnectionProvider;
+    }
+
     /**
      * A builder for {@link PostgresqlConnectionConfiguration} instances.
      * <p>
@@ -256,6 +265,8 @@ public final class PostgresqlConnectionConfiguration {
         private CharSequence password;
 
         private int port = DEFAULT_PORT;
+
+        private ProtocolConnectionProvider protocolConnectionProvider = ProtocolConnectionProvider.reactorNettyClientProvider;
 
         @Nullable
         private String schema;
@@ -330,7 +341,7 @@ public final class PostgresqlConnectionConfiguration {
             }
 
             return new PostgresqlConnectionConfiguration(this.applicationName, this.autodetectExtensions, this.connectTimeout, this.database, this.extensions, this.forceBinary, this.host,
-                this.options, this.password, this.port, this.schema, this.socket, this.username, this.createSslConfig());
+                this.options, this.password, this.port, this.schema, this.socket, this.username, this.createSslConfig(), this.protocolConnectionProvider);
         }
 
         /**
@@ -450,6 +461,11 @@ public final class PostgresqlConnectionConfiguration {
          */
         public Builder port(int port) {
             this.port = port;
+            return this;
+        }
+
+        public Builder protocolConnectionProvider(ProtocolConnectionProvider protocolConnectionProvider) {
+            this.protocolConnectionProvider = protocolConnectionProvider;
             return this;
         }
 
