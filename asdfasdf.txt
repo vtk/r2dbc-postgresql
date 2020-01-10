@@ -1,0 +1,20 @@
+Benchmark                               Mode  Cnt       Score        Error  Units
+StatementBenchmarks.extendedJdbc        avgt   20  882114.552 ± 258809.909  ns/op
+StatementBenchmarks.extendedR2dbc       avgt   20  922511.646 ±  84599.244  ns/op
+StatementBenchmarks.extendedR2dbcNetty  avgt   20  821173.207 ±  36361.999  ns/op
+
+StatementBenchmarks.simpleJdbc          avgt   20  725521.415 ±  27437.376  ns/op
+StatementBenchmarks.simpleR2dbc         avgt   20  818218.469 ±  54435.093  ns/op
+StatementBenchmarks.simpleR2dbcNetty    avgt   20  803479.398 ±  32095.287  ns/op
+
+
+
+
+Benchmark                                Mode  Cnt     Score    Error  Units
+StatementBenchmarks.extendedJdbc        thrpt   20  1584.952 ± 21.367  ops/s
+StatementBenchmarks.extendedR2dbc       thrpt   20  1153.482 ± 51.917  ops/s
+StatementBenchmarks.extendedR2dbcNetty  thrpt   20  1290.924 ± 53.042  ops/s
+
+StatementBenchmarks.simpleJdbc          thrpt   20  1438.880 ± 65.272  ops/s
+StatementBenchmarks.simpleR2dbc         thrpt   20  1247.037 ± 49.221  ops/s
+StatementBenchmarks.simpleR2dbcNetty    thrpt   20  1291.523 ± 66.481  ops/s

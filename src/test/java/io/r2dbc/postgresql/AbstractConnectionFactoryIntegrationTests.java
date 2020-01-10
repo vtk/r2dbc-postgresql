@@ -21,15 +21,6 @@ public abstract class AbstractConnectionFactoryIntegrationTests extends Abstract
 
     abstract ProtocolConnectionProvider provider();
 
-    public static class ReactorNettyConnectionFactoryIntegrationTests extends AbstractConnectionFactoryIntegrationTests {
-
-        @Override
-        ProtocolConnectionProvider provider() {
-            return ProtocolConnectionProvider.reactorNettyClientProvider;
-        }
-    }
-
-
     @Override
     protected void customize(PostgresqlConnectionConfiguration.Builder builder) {
         builder.protocolConnectionProvider(provider());

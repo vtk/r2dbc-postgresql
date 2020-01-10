@@ -16,6 +16,7 @@
 
 package io.r2dbc.postgresql.client;
 
+import io.netty.channel.Channel;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.kqueue.KQueue;
 import io.netty.util.ReferenceCountUtil;
@@ -35,16 +36,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
-import org.springframework.util.ReflectionUtils;
 import reactor.core.publisher.EmitterProcessor;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.UnicastProcessor;
-import reactor.netty.Connection;
 import reactor.test.StepVerifier;
 
 import java.io.File;
-import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
@@ -65,13 +63,9 @@ abstract class AbstractProtocolConnectionTest {
     @RegisterExtension
     static final PostgresqlServerExtension SERVER = new PostgresqlServerExtension();
 
-    static final Field CONNECTION = ReflectionUtils.findField(ReactorNettyProtocolConnection.class, "connection");
-
-    static {
-        ReflectionUtils.makeAccessible(CONNECTION);
-    }
-
     protected abstract ProtocolConnectionProvider provider();
+
+    protected abstract Channel getChannel(ProtocolConnection connection);
 
     protected final ProtocolConnection client = provider().connect(InetSocketAddress.createUnresolved(SERVER.getHost(), SERVER.getPort()), null, SSLConfig.disabled())
         .delayUntil(client -> StartupMessageFlow
@@ -109,9 +103,7 @@ abstract class AbstractProtocolConnectionTest {
 
     @Test
     void disconnectedShouldRejectExchange() {
-
-        Connection connection = (Connection) ReflectionUtils.getField(CONNECTION, this.client);
-        connection.channel().close().awaitUninterruptibly();
+        getChannel(this.client).close().awaitUninterruptibly();
 
         this.client.close()
             .thenMany(this.client.exchange(Mono.empty()))
@@ -121,16 +113,13 @@ abstract class AbstractProtocolConnectionTest {
 
     @Test
     void shouldCancelExchangeOnCloseFirstMessage() throws Exception {
-
-        Connection connection = (Connection) ReflectionUtils.getField(CONNECTION, this.client);
-
         EmitterProcessor<FrontendMessage> messages = EmitterProcessor.create();
         Flux<BackendMessage> query = this.client.exchange(messages);
         CompletableFuture<List<BackendMessage>> future = query.collectList().toFuture();
 
-        connection.channel().eventLoop().execute(() -> {
+        getChannel(this.client).eventLoop().execute(() -> {
 
-            connection.channel().close();
+            getChannel(this.client).close();
             messages.onNext(new Query("SELECT value FROM test"));
         });
 
@@ -138,19 +127,16 @@ abstract class AbstractProtocolConnectionTest {
             future.get(5, TimeUnit.SECONDS);
             fail("Expected PostgresConnectionClosedException");
         } catch (ExecutionException e) {
-            assertThat(e).hasCauseInstanceOf(ReactorNettyProtocolConnection.PostgresConnectionClosedException.class).hasMessageContaining("Cannot exchange messages");
+            assertThat(e).hasCauseInstanceOf(R2dbcNonTransientResourceException.class).hasMessageContaining("Cannot exchange messages");
         }
     }
 
     @Test
     void shouldCancelExchangeOnCloseInFlight() throws Exception {
-
-        Connection connection = (Connection) ReflectionUtils.getField(CONNECTION, this.client);
-
         EmitterProcessor<FrontendMessage> messages = EmitterProcessor.create();
         Flux<BackendMessage> query = this.client.exchange(messages);
         CompletableFuture<List<BackendMessage>> future = query.doOnNext(ignore -> {
-            connection.channel().close();
+            getChannel(this.client).disconnect();
             messages.onNext(new Query("SELECT value FROM test"));
 
         }).collectList().toFuture();
@@ -158,7 +144,7 @@ abstract class AbstractProtocolConnectionTest {
         messages.onNext(new Query("SELECT value FROM test;SELECT value FROM test;"));
 
         try {
-            future.get(5, TimeUnit.SECONDS);
+            future.get(50, TimeUnit.SECONDS);
             fail("Expected PostgresConnectionClosedException");
         } catch (ExecutionException e) {
             assertThat(e).hasCauseInstanceOf(R2dbcNonTransientResourceException.class).hasMessageContaining("Connection closed");

@@ -17,11 +17,8 @@
 package io.r2dbc.postgresql.message.frontend;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.Unpooled;
 import io.r2dbc.postgresql.util.Assert;
-import org.reactivestreams.Publisher;
-import reactor.core.publisher.Mono;
 import reactor.util.annotation.Nullable;
 
 import java.time.ZoneId;
@@ -87,37 +84,34 @@ public final class StartupMessage implements FrontendMessage {
         this.options = options;
     }
 
+
     @Override
-    public Publisher<ByteBuf> encode(ByteBufAllocator byteBufAllocator) {
-        Assert.requireNonNull(byteBufAllocator, "byteBufAllocator must not be null");
+    public void encode(ByteBuf out) {
+        Assert.requireNonNull(out, "out must not be null");
 
-        return Mono.fromSupplier(() -> {
-            ByteBuf out = byteBufAllocator.ioBuffer();
+        writeLengthPlaceholder(out);
+        writeShort(out, 3, 0);
+        writeParameter(out, USER, this.username);
 
-            writeLengthPlaceholder(out);
-            writeShort(out, 3, 0);
-            writeParameter(out, USER, this.username);
+        if (this.database != null) {
+            writeParameter(out, DATABASE, this.database);
+        }
 
-            if (this.database != null) {
-                writeParameter(out, DATABASE, this.database);
+        writeParameter(out, APPLICATION_NAME, this.applicationName);
+        writeParameter(out, CLIENT_ENCODING, UTF8);
+        writeParameter(out, DATE_STYLE, ISO);
+        writeParameter(out, EXTRA_FLOAT_DIGITS, NUMERAL_2);
+        writeParameter(out, TIMEZONE, SYSTEM_TIME_ZONE);
+        if (this.options != null) {
+            for (Map.Entry<String, String> option : this.options.entrySet()) {
+                ByteBuf key = Unpooled.copiedBuffer(option.getKey(), UTF_8);
+                writeParameter(out, key, option.getValue());
+                key.release();
             }
+        }
+        writeByte(out, 0);
 
-            writeParameter(out, APPLICATION_NAME, this.applicationName);
-            writeParameter(out, CLIENT_ENCODING, UTF8);
-            writeParameter(out, DATE_STYLE, ISO);
-            writeParameter(out, EXTRA_FLOAT_DIGITS, NUMERAL_2);
-            writeParameter(out, TIMEZONE, SYSTEM_TIME_ZONE);
-            if (this.options != null) {
-                for (Map.Entry<String, String> option : this.options.entrySet()) {
-                    ByteBuf key = Unpooled.copiedBuffer(option.getKey(), UTF_8);
-                    writeParameter(out, key, option.getValue());
-                    key.release();
-                }
-            }
-            writeByte(out, 0);
-
-            return writeSize(out, 0);
-        });
+        writeSize(out, 0);
     }
 
     @Override
@@ -148,6 +142,11 @@ public final class StartupMessage implements FrontendMessage {
             ", username='" + username + '\'' +
             ", options='" + options + '\'' +
             '}';
+    }
+
+    @Override
+    public boolean requireFlush() {
+        return true;
     }
 
     private void writeParameter(ByteBuf out, ByteBuf key, String value) {

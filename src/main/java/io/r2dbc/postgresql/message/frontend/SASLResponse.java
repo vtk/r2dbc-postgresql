@@ -17,15 +17,11 @@
 package io.r2dbc.postgresql.message.frontend;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
 import io.r2dbc.postgresql.util.Assert;
-import org.reactivestreams.Publisher;
-import reactor.core.publisher.Mono;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
-import static io.r2dbc.postgresql.message.frontend.FrontendMessageUtils.MESSAGE_OVERHEAD;
 import static io.r2dbc.postgresql.message.frontend.FrontendMessageUtils.writeByte;
 import static io.r2dbc.postgresql.message.frontend.FrontendMessageUtils.writeBytes;
 import static io.r2dbc.postgresql.message.frontend.FrontendMessageUtils.writeLengthPlaceholder;
@@ -51,18 +47,14 @@ public final class SASLResponse implements FrontendMessage {
     }
 
     @Override
-    public Publisher<ByteBuf> encode(ByteBufAllocator byteBufAllocator) {
-        Assert.requireNonNull(byteBufAllocator, "byteBufAllocator must not be null");
+    public void encode(ByteBuf out) {
+        Assert.requireNonNull(out, "out must not be null");
 
-        return Mono.fromSupplier(() -> {
-            ByteBuf out = byteBufAllocator.ioBuffer(MESSAGE_OVERHEAD + this.data.remaining());
+        writeByte(out, 'p');
+        writeLengthPlaceholder(out);
+        writeBytes(out, this.data);
 
-            writeByte(out, 'p');
-            writeLengthPlaceholder(out);
-            writeBytes(out, this.data);
-
-            return writeSize(out);
-        });
+        writeSize(out);
     }
 
     @Override
@@ -89,4 +81,8 @@ public final class SASLResponse implements FrontendMessage {
             '}';
     }
 
+    @Override
+    public boolean requireFlush() {
+        return true;
+    }
 }

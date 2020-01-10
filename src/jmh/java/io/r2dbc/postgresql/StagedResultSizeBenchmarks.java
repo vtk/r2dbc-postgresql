@@ -87,7 +87,7 @@ public class StagedResultSizeBenchmarks extends BenchmarkSettings {
         }
     }
 
-    @Benchmark
+//    @Benchmark
     public void simpleJdbc(ConnectionHolder connectionHolder, Blackhole voodoo) throws SQLException {
 
         Statement statement = connectionHolder.jdbc.createStatement();
@@ -101,7 +101,7 @@ public class StagedResultSizeBenchmarks extends BenchmarkSettings {
         statement.close();
     }
 
-    @Benchmark
+//    @Benchmark
     public void simpleR2dbc(ConnectionHolder connectionHolder, Blackhole voodoo) {
 
         io.r2dbc.spi.Statement statement = connectionHolder.r2dbc.createStatement("SELECT * FROM result_sizes");
@@ -111,7 +111,7 @@ public class StagedResultSizeBenchmarks extends BenchmarkSettings {
         voodoo.consume(name);
     }
 
-    @Benchmark
+//    @Benchmark
     public void extendedJdbc(ConnectionHolder connectionHolder, Blackhole voodoo) throws SQLException {
 
         connectionHolder.jdbc.setAutoCommit(false);
@@ -129,7 +129,7 @@ public class StagedResultSizeBenchmarks extends BenchmarkSettings {
         statement.close();
     }
 
-    @Benchmark
+//    @Benchmark
     public void extendedR2dbc(ConnectionHolder connectionHolder, Blackhole voodoo) throws SQLException {
 
         io.r2dbc.spi.Statement statement = connectionHolder.r2dbc.createStatement("SELECT * FROM result_sizes WHERE name != $1").bind("$1", "foo");

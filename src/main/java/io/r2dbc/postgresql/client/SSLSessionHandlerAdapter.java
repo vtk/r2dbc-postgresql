@@ -117,7 +117,16 @@ final class SSLSessionHandlerAdapter extends ChannelInboundHandlerAdapter implem
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
-        Mono.from(SSLRequest.INSTANCE.encode(this.alloc)).subscribe(ctx::writeAndFlush);
+        ByteBuf buf = this.alloc.ioBuffer();
+        SSLRequest.INSTANCE.encode(buf);
+        ctx.writeAndFlush(buf);
+    }
+
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        ByteBuf buf = this.alloc.ioBuffer();
+        SSLRequest.INSTANCE.encode(buf);
+        ctx.writeAndFlush(buf);
     }
 
     Mono<Void> getHandshake() {

@@ -17,11 +17,8 @@
 package io.r2dbc.postgresql.message.frontend;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
 import io.r2dbc.postgresql.message.Format;
 import io.r2dbc.postgresql.util.Assert;
-import org.reactivestreams.Publisher;
-import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Objects;
@@ -65,33 +62,29 @@ public final class FunctionCall implements FrontendMessage {
     }
 
     @Override
-    public Publisher<ByteBuf> encode(ByteBufAllocator byteBufAllocator) {
-        Assert.requireNonNull(byteBufAllocator, "byteBufAllocator must not be null");
+    public void encode(ByteBuf out) {
+        Assert.requireNonNull(out, "out must not be null");
 
-        return Mono.fromSupplier(() -> {
-            ByteBuf out = byteBufAllocator.ioBuffer();
+        writeByte(out, 'F');
+        writeLengthPlaceholder(out);
+        writeInt(out, this.functionId);
 
-            writeByte(out, 'F');
-            writeLengthPlaceholder(out);
-            writeInt(out, this.functionId);
+        writeShort(out, this.argumentFormats.size());
+        this.argumentFormats.forEach(format -> writeShort(out, format.getDiscriminator()));
 
-            writeShort(out, this.argumentFormats.size());
-            this.argumentFormats.forEach(format -> writeShort(out, format.getDiscriminator()));
-
-            writeShort(out, this.arguments.size());
-            this.arguments.forEach(argument -> {
-                if (argument == null) {
-                    writeInt(out, NULL);
-                } else {
-                    writeInt(out, argument.readableBytes());
-                    writeBytes(out, argument);
-                }
-            });
-
-            writeShort(out, this.resultFormat.getDiscriminator());
-
-            return writeSize(out);
+        writeShort(out, this.arguments.size());
+        this.arguments.forEach(argument -> {
+            if (argument == null) {
+                writeInt(out, NULL);
+            } else {
+                writeInt(out, argument.readableBytes());
+                writeBytes(out, argument);
+            }
         });
+
+        writeShort(out, this.resultFormat.getDiscriminator());
+
+        writeSize(out);
     }
 
     @Override

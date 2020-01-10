@@ -17,10 +17,7 @@
 package io.r2dbc.postgresql.message.frontend;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
 import io.r2dbc.postgresql.util.Assert;
-import org.reactivestreams.Publisher;
-import reactor.core.publisher.Mono;
 
 import java.util.Objects;
 
@@ -51,19 +48,15 @@ public final class CancelRequest implements FrontendMessage {
     }
 
     @Override
-    public Publisher<ByteBuf> encode(ByteBufAllocator byteBufAllocator) {
-        Assert.requireNonNull(byteBufAllocator, "byteBufAllocator must not be null");
+    public void encode(ByteBuf out) {
+        Assert.requireNonNull(out, "out must not be null");
 
-        return Mono.fromSupplier(() -> {
-            ByteBuf out = byteBufAllocator.ioBuffer(16);
+        writeLengthPlaceholder(out);
+        writeInt(out, REQUEST_CODE);
+        writeInt(out, this.processId);
+        writeInt(out, this.secretKey);
 
-            writeLengthPlaceholder(out);
-            writeInt(out, REQUEST_CODE);
-            writeInt(out, this.processId);
-            writeInt(out, this.secretKey);
-
-            return writeSize(out, 0);
-        });
+        writeSize(out, 0);
     }
 
     @Override

@@ -165,7 +165,7 @@ public final class ReactorNettyProtocolConnection implements ProtocolConnection 
                 if (DEBUG_ENABLED) {
                     logger.debug("Request:  {}", message);
                 }
-                return connection.outbound().send(message.encode(this.byteBufAllocator));
+                return connection.outbound().sendObject(message.encode(this.byteBufAllocator));
             }, 1)
             .then();
 
@@ -321,7 +321,7 @@ public final class ReactorNettyProtocolConnection implements ProtocolConnection 
 
                 return Flux.just(Terminate.INSTANCE)
                     .doOnNext(message -> logger.debug("Request:  {}", message))
-                    .concatMap(message -> this.connection.outbound().send(message.encode(this.connection.outbound().alloc())))
+                    .concatMap(message -> this.connection.outbound().sendObject(message.encode(this.connection.outbound().alloc())))
                     .then()
                     .doOnSuccess(v -> this.connection.dispose())
                     .then(this.connection.onDispose());
@@ -479,7 +479,7 @@ public final class ReactorNettyProtocolConnection implements ProtocolConnection 
         }
     }
 
-    static class SocketLoopResources implements LoopResources {
+    public static class SocketLoopResources implements LoopResources {
 
         @Nullable
         private static final Class<? extends Channel> EPOLL_SOCKET = findClass("io.netty.channel.epoll.EpollDomainSocketChannel");

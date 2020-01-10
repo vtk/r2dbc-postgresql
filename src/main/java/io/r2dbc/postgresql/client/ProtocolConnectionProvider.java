@@ -13,4 +13,6 @@ public interface ProtocolConnectionProvider {
 
     ProtocolConnectionProvider reactorNettyClientProvider = (endpoint, connectTimeout, sslConfig)
         -> ReactorNettyProtocolConnection.connect(ConnectionProvider.newConnection(), endpoint, connectTimeout, sslConfig).cast(ProtocolConnection.class);
+
+    ProtocolConnectionProvider nettyClientProvider = NettyProtocolConnection.PROVIDER;
 }

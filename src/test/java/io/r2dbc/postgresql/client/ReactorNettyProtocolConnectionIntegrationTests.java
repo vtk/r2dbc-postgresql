@@ -16,10 +16,29 @@
 
 package io.r2dbc.postgresql.client;
 
+import io.netty.channel.Channel;
+import org.springframework.util.ReflectionUtils;
+import reactor.netty.Connection;
+
+import java.lang.reflect.Field;
+
 final class ReactorNettyProtocolConnectionIntegrationTests extends AbstractProtocolConnectionTest {
+
+    static final Field CONNECTION = ReflectionUtils.findField(ReactorNettyProtocolConnection.class, "connection");
+
+    static {
+        ReflectionUtils.makeAccessible(CONNECTION);
+    }
+
 
     @Override
     protected ProtocolConnectionProvider provider() {
         return ProtocolConnectionProvider.reactorNettyClientProvider;
+    }
+
+    @Override
+    protected Channel getChannel(ProtocolConnection protocolConnection) {
+        Connection connection = (Connection) ReflectionUtils.getField(CONNECTION, protocolConnection);
+        return connection.channel();
     }
 }

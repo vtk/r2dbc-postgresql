@@ -18,6 +18,7 @@ package io.r2dbc.postgresql.message.frontend;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
+import io.r2dbc.postgresql.util.Assert;
 import org.reactivestreams.Publisher;
 
 /**
@@ -32,6 +33,20 @@ public interface FrontendMessage {
      * @return a {@link Publisher} that produces the {@link ByteBuf} containing the encoded message
      * @throws IllegalArgumentException if {@code byteBufAllocator} is {@code null}
      */
-    Publisher<ByteBuf> encode(ByteBufAllocator byteBufAllocator);
+    default ByteBuf encode(ByteBufAllocator byteBufAllocator) {
+        Assert.requireNonNull(byteBufAllocator, "byteBufAllocator must not be null");
 
+        ByteBuf out = byteBufAllocator.ioBuffer();
+
+        this.encode(out);
+
+        return out;
+    }
+
+
+    void encode(ByteBuf out);
+
+    default boolean requireFlush() {
+        return false;
+    }
 }

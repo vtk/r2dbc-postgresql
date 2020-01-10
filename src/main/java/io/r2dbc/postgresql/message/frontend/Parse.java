@@ -17,10 +17,7 @@
 package io.r2dbc.postgresql.message.frontend;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
 import io.r2dbc.postgresql.util.Assert;
-import org.reactivestreams.Publisher;
-import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Objects;
@@ -70,22 +67,18 @@ public final class Parse implements FrontendMessage {
     }
 
     @Override
-    public Publisher<ByteBuf> encode(ByteBufAllocator byteBufAllocator) {
-        Assert.requireNonNull(byteBufAllocator, "byteBufAllocator must not be null");
+    public void encode(ByteBuf out) {
+        Assert.requireNonNull(out, "out must not be null");
 
-        return Mono.fromSupplier(() -> {
-            ByteBuf out = byteBufAllocator.ioBuffer();
+        writeByte(out, 'P');
+        writeLengthPlaceholder(out);
+        writeCStringUTF8(out, this.name);
+        writeCStringUTF8(out, this.query);
 
-            writeByte(out, 'P');
-            writeLengthPlaceholder(out);
-            writeCStringUTF8(out, this.name);
-            writeCStringUTF8(out, this.query);
+        writeShort(out, this.parameters.size());
+        this.parameters.forEach(parameter -> writeInt(out, parameter));
 
-            writeShort(out, this.parameters.size());
-            this.parameters.forEach(parameter -> writeInt(out, parameter));
-
-            return writeSize(out);
-        });
+        writeSize(out);
     }
 
     @Override

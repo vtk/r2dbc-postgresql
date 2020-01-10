@@ -17,10 +17,7 @@
 package io.r2dbc.postgresql.message.frontend;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
 import io.r2dbc.postgresql.util.Assert;
-import org.reactivestreams.Publisher;
-import reactor.core.publisher.Mono;
 
 import java.util.Objects;
 
@@ -57,19 +54,15 @@ public final class Close implements FrontendMessage {
     }
 
     @Override
-    public Publisher<ByteBuf> encode(ByteBufAllocator byteBufAllocator) {
-        Assert.requireNonNull(byteBufAllocator, "byteBufAllocator must not be null");
+    public void encode(ByteBuf out) {
+        Assert.requireNonNull(out, "out must not be null");
 
-        return Mono.fromSupplier(() -> {
-            ByteBuf out = byteBufAllocator.ioBuffer();
+        writeByte(out, 'C');
+        writeLengthPlaceholder(out);
+        writeByte(out, this.type.getDiscriminator());
+        writeCStringUTF8(out, this.name);
 
-            writeByte(out, 'C');
-            writeLengthPlaceholder(out);
-            writeByte(out, this.type.getDiscriminator());
-            writeCStringUTF8(out, this.name);
-
-            return writeSize(out);
-        });
+        writeSize(out);
     }
 
     @Override

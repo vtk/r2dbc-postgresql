@@ -86,6 +86,9 @@ public final class AuthenticationSASL implements AuthenticationMessage {
             authenticationMechanisms.add(readCStringUTF8(in));
         }
 
+        byte terminal = in.readByte();
+        assert terminal == TERMINAL;
+
         return new AuthenticationSASL(authenticationMechanisms);
     }
 

@@ -26,6 +26,7 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.infra.Blackhole;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -37,10 +38,10 @@ import java.util.concurrent.TimeUnit;
 /**
  * Benchmarks for Statement execution modes. Contains the following execution methods:
  */
+@Testable
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)
-@Testable
-public class StatementBenchmarks {
+public class StatementBenchmarks extends BenchmarkSettings{
 
     private static PostgresqlServerExtension extension = new PostgresqlServerExtension();
 
@@ -50,6 +51,8 @@ public class StatementBenchmarks {
         final Connection jdbc;
 
         final io.r2dbc.spi.Connection r2dbc;
+
+        final io.r2dbc.spi.Connection r2dbcNetty;
 
         public ConnectionHolder() {
 
@@ -72,6 +75,9 @@ public class StatementBenchmarks {
                 jdbc.setAutoCommit(false);
 
                 r2dbc = new PostgresqlConnectionFactory(extension.getConnectionConfiguration()).create().block();
+                Mono.from(r2dbc.setAutoCommit(false)).block();
+                r2dbcNetty = new PostgresqlConnectionFactory(extension.configBuilder().protocolConnectionProvider(io.r2dbc.postgresql.client.ProtocolConnectionProvider.nettyClientProvider).build()).create().block();
+                Mono.from(r2dbcNetty.setAutoCommit(false)).block();
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
@@ -104,6 +110,16 @@ public class StatementBenchmarks {
     }
 
     @Benchmark
+    public void simpleR2dbcNetty(ConnectionHolder connectionHolder, Blackhole voodoo) {
+
+        io.r2dbc.spi.Statement statement = connectionHolder.r2dbcNetty.createStatement("SELECT * FROM simple_test");
+
+        String name = Flux.from(statement.execute()).flatMap(it -> it.map((row, rowMetadata) -> row.get("name", String.class))).blockLast();
+
+        voodoo.consume(name);
+    }
+
+    @Benchmark
     public void extendedJdbc(ConnectionHolder connectionHolder, Blackhole voodoo) throws SQLException {
 
         PreparedStatement statement = connectionHolder.jdbc.prepareStatement("SELECT * FROM simple_test WHERE name = ?");
@@ -123,6 +139,16 @@ public class StatementBenchmarks {
     public void extendedR2dbc(ConnectionHolder connectionHolder, Blackhole voodoo) throws SQLException {
 
         io.r2dbc.spi.Statement statement = connectionHolder.r2dbc.createStatement("SELECT * FROM simple_test WHERE name = $1").bind("$1", "plpgsql");
+
+        String name = Flux.from(statement.execute()).flatMap(it -> it.map((row, rowMetadata) -> row.get("name", String.class))).blockLast();
+
+        voodoo.consume(name);
+    }
+
+    @Benchmark
+    public void extendedR2dbcNetty(ConnectionHolder connectionHolder, Blackhole voodoo) throws SQLException {
+
+        io.r2dbc.spi.Statement statement = connectionHolder.r2dbcNetty.createStatement("SELECT * FROM simple_test WHERE name = $1").bind("$1", "plpgsql");
 
         String name = Flux.from(statement.execute()).flatMap(it -> it.map((row, rowMetadata) -> row.get("name", String.class))).blockLast();
 
