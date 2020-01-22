@@ -29,6 +29,7 @@ import io.netty.channel.socket.DatagramChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
+import io.netty.util.ReferenceCountUtil;
 import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.r2dbc.postgresql.message.backend.BackendKeyData;
@@ -45,6 +46,8 @@ import io.r2dbc.postgresql.message.frontend.Terminate;
 import io.r2dbc.postgresql.util.Assert;
 import io.r2dbc.spi.R2dbcNonTransientResourceException;
 import org.reactivestreams.Publisher;
+import org.reactivestreams.Subscription;
+import reactor.core.CoreSubscriber;
 import reactor.core.Disposable;
 import reactor.core.publisher.DirectProcessor;
 import reactor.core.publisher.EmitterProcessor;
@@ -61,6 +64,7 @@ import reactor.util.Logger;
 import reactor.util.Loggers;
 import reactor.util.annotation.Nullable;
 import reactor.util.concurrent.Queues;
+import reactor.util.context.Context;
 
 import javax.net.ssl.SSLException;
 import java.net.InetSocketAddress;
@@ -108,6 +112,8 @@ public final class ReactorNettyClient implements Client {
 
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
 
+    private final BackendMessageSubscriber messageSubscriber = new BackendMessageSubscriber();
+
     private volatile Integer processId;
 
     private volatile Integer secretKey;
@@ -131,26 +137,15 @@ public final class ReactorNettyClient implements Client {
         this.byteBufAllocator = connection.outbound().alloc();
 
         AtomicReference<Throwable> receiveError = new AtomicReference<>();
-        Mono<Void> receive = connection.inbound().receive()
+
+        connection.inbound().receive()
             .map(BackendMessageDecoder::decode)
             .handle(this::handleResponse)
             .doOnError(throwable -> {
                 receiveError.set(throwable);
                 handleConnectionError(throwable);
             })
-            .handle((message, sink) -> {
-                Conversation receiver = this.conversations.peek();
-                if (receiver != null) {
-                    if (receiver.takeUntil.test(message)) {
-                        receiver.sink.complete();
-                        this.conversations.poll();
-                    } else {
-                        receiver.sink.next(message);
-                    }
-                }
-            })
-            .doOnComplete(this::handleClose)
-            .then();
+            .subscribe(this.messageSubscriber);
 
         Mono<Void> request = this.requestProcessor
             .concatMap(Function.identity())
@@ -162,9 +157,6 @@ public final class ReactorNettyClient implements Client {
             }, 1)
             .then();
 
-        receive
-            .onErrorResume(this::resumeError)
-            .subscribe();
 
         request
             .onErrorResume(this::resumeError)
@@ -213,6 +205,7 @@ public final class ReactorNettyClient implements Client {
                     return;
                 }
                 synchronized (this) {
+                    sink.onRequest(this.messageSubscriber::onRequest);
                     this.conversations.add(new Conversation(sink, takeUntil));
                     this.requests.next(Flux.from(requests).doOnNext(m -> {
                         if (!isConnected()) {
@@ -610,4 +603,65 @@ public final class ReactorNettyClient implements Client {
         }
     }
 
+
+    private class BackendMessageSubscriber implements CoreSubscriber<BackendMessage> {
+
+        private Subscription subscription;
+
+        public void onRequest(long n) {
+            this.subscription.request(n);
+        }
+
+        @Override
+        public void onSubscribe(Subscription s) {
+            this.subscription = s;
+            s.request(Queues.SMALL_BUFFER_SIZE);
+        }
+
+        @Override
+        public void onNext(BackendMessage message) {
+            Conversation receiver = ReactorNettyClient.this.conversations.peek();
+            if (receiver != null) {
+                if (receiver.takeUntil.test(message)) {
+                    receiver.sink.complete();
+                    ReactorNettyClient.this.conversations.poll();
+                } else {
+                    if (!receiver.sink.isCancelled()) {
+                        receiver.sink.next(message);
+                    } else {
+                        ReferenceCountUtil.release(message);
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+            handleConnectionError(throwable);
+            ReactorNettyClient.this.requestProcessor.onComplete();
+
+            if (isSslException(throwable)) {
+                logger.debug("Connection Error", throwable);
+            } else {
+                logger.error("Connection Error", throwable);
+            }
+
+            ReactorNettyClient.this.close().subscribe();
+        }
+
+        @Override
+        public void onComplete() {
+            ReactorNettyClient.this.handleClose();
+        }
+
+        @Override
+        public Context currentContext() {
+            Conversation receiver = ReactorNettyClient.this.conversations.peek();
+            if (receiver != null) {
+                return receiver.sink.currentContext();
+            } else {
+                return Context.empty();
+            }
+        }
+    }
 }
