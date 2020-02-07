@@ -21,8 +21,12 @@ import io.r2dbc.spi.ConnectionFactories;
 import io.r2dbc.spi.ConnectionFactory;
 import io.r2dbc.spi.ConnectionFactoryOptions;
 import io.r2dbc.spi.test.TestKit;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.jdbc.core.JdbcOperations;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
 import static io.r2dbc.postgresql.PostgresqlConnectionFactoryProvider.POSTGRESQL_DRIVER;
 import static io.r2dbc.spi.ConnectionFactoryOptions.DATABASE;
@@ -87,4 +91,24 @@ final class PostgresqlTestKit implements TestKit<String> {
         return String.format("$%d", index + 1);
     }
 
+
+    @Test
+    void fetchSize() {
+        for (int i = 0; i < 100; i++) {
+            getJdbcOperations().execute(String.format("INSERT INTO test VALUES(%d)", i));
+        }
+
+        Mono.from(getConnectionFactory().create())
+            .flatMapMany(connection -> Flux.from(connection.createStatement("SELECT value FROM test WHERE 1 = $1")
+                .bind("$1", 1).add()
+                .bind("$1", 1)
+                .fetchSize(24)
+                .execute())
+                .flatMap(r -> r.map((row, meta) -> row.get(0, Integer.class)))
+                .concatWith(Flux.from(connection.createStatement("SELECT 1").execute()).flatMap(r -> r.map((row, meta) -> row.get(0, Integer.class))))
+                .concatWith(Mono.from(connection.close()).then(Mono.empty())))
+            .as(StepVerifier::create)
+            .expectNextCount(201).as("values from insertions")
+            .verifyComplete();
+    }
 }

@@ -40,6 +40,7 @@ import java.util.function.Predicate;
 import java.util.regex.Matcher;
 
 import static io.r2dbc.postgresql.client.ExtendedQueryMessageFlow.PARAMETER_SYMBOL;
+import static io.r2dbc.postgresql.message.frontend.Execute.NO_LIMIT;
 import static io.r2dbc.postgresql.util.PredicateUtils.not;
 import static io.r2dbc.postgresql.util.PredicateUtils.or;
 
@@ -58,6 +59,9 @@ final class ExtendedQueryPostgresqlStatement implements PostgresqlStatement {
     private final String sql;
 
     private final StatementCache statementCache;
+
+    private int fetchSize = NO_LIMIT;
+
 
     private String[] generatedColumns;
 
@@ -139,6 +143,12 @@ final class ExtendedQueryPostgresqlStatement implements PostgresqlStatement {
     }
 
     @Override
+    public ExtendedQueryPostgresqlStatement fetchSize(int rows) {
+        this.fetchSize = Assert.require(rows, s -> s >= 0, "fetch size must be greater or equal zero");
+        return this;
+    }
+
+    @Override
     public String toString() {
         return "ExtendedQueryPostgresqlStatement{" +
             "bindings=" + this.bindings +
@@ -182,7 +192,7 @@ final class ExtendedQueryPostgresqlStatement implements PostgresqlStatement {
         return this.statementCache.getName(this.bindings.first(), sql)
             .flatMapMany(name -> {
                 return ExtendedQueryMessageFlow
-                    .execute(Flux.fromIterable(this.bindings.bindings), this.context.getClient(), this.portalNameSupplier, name, sql, this.forceBinary);
+                    .execute(Flux.fromIterable(this.bindings.bindings), this.context.getClient(), this.portalNameSupplier, name, sql, this.forceBinary, this.fetchSize);
             })
             .filter(RESULT_FRAME_FILTER)
             .windowUntil(CloseComplete.class::isInstance)
