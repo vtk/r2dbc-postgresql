@@ -139,7 +139,8 @@ final class ExtendedQueryPostgresqlStatement implements PostgresqlStatement {
 
     @Override
     public ExtendedQueryPostgresqlStatement fetchSize(int rows) {
-        this.fetchSize = Assert.require(rows, s -> s >= 0, "fetch size must be greater or equal zero");
+        Assert.isTrue(rows >= 0, "fetch size must be greater or equal zero");
+        this.fetchSize = rows;
         return this;
     }
 
