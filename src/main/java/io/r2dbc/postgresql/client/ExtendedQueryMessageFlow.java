@@ -40,6 +40,7 @@ import io.r2dbc.postgresql.util.Assert;
 import io.r2dbc.postgresql.util.Operators;
 import reactor.core.publisher.DirectProcessor;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.SynchronousSink;
 
 import java.util.Collection;
@@ -94,27 +95,28 @@ public final class ExtendedQueryMessageFlow {
         return Flux.defer(() -> {
             String portal = portalNameSupplier.get();
             Flux<FrontendMessage> bindFlow = toBindFlow(binding, portal, statementName, query, forceBinary, fetchSize).concatWithValues(Flush.INSTANCE);
-            DirectProcessor<FrontendMessage> flowProcessor = DirectProcessor.create();
+            DirectProcessor<FrontendMessage> requestsProcessor = DirectProcessor.create();
+            FluxSink<FrontendMessage> requestsSink = requestsProcessor.sink();
             AtomicBoolean isCanceled = new AtomicBoolean(false);
-            return client.exchange(bindFlow.concatWith(flowProcessor))
+            return client.exchange(bindFlow.concatWith(requestsProcessor))
                 .handle((BackendMessage message, SynchronousSink<BackendMessage> sink) -> {
                     if (message instanceof CommandComplete) {
-                        flowProcessor.onNext(new Close(portal, PORTAL));
-                        flowProcessor.onNext(Sync.INSTANCE);
-                        flowProcessor.onComplete();
+                        requestsSink.next(new Close(portal, PORTAL));
+                        requestsSink.next(Sync.INSTANCE);
+                        requestsSink.complete();
                         sink.next(message);
                     } else if (message instanceof ErrorResponse) {
-                        flowProcessor.onNext(Sync.INSTANCE);
-                        flowProcessor.onComplete();
+                        requestsSink.next(Sync.INSTANCE);
+                        requestsSink.complete();
                         sink.next(message);
                     } else if (message instanceof PortalSuspended) {
                         if (isCanceled.get()) {
-                            flowProcessor.onNext(new Close(portal, PORTAL));
-                            flowProcessor.onNext(Sync.INSTANCE);
-                            flowProcessor.onComplete();
+                            requestsSink.next(new Close(portal, PORTAL));
+                            requestsSink.next(Sync.INSTANCE);
+                            requestsSink.complete();
                         } else {
-                            flowProcessor.onNext(new Execute(portal, fetchSize));
-                            flowProcessor.onNext(Flush.INSTANCE);
+                            requestsSink.next(new Execute(portal, fetchSize));
+                            requestsSink.next(Flush.INSTANCE);
                         }
                     } else {
                         sink.next(message);
